@@ -15,7 +15,6 @@ import type { TicketGenerationError } from '../types/ticket.types';
  */
 export function useTicketGeneration() {
   const ticketStore = useTicketStore();
-  const settings = useSettingsStore.getState();
 
   const generateTicket = async (formData: AlertData): Promise<void> => {
     // Reset previous state

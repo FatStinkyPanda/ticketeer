@@ -3,6 +3,7 @@ export type ProviderId = 'anthropic' | 'gemini' | 'openrouter';
 export interface ProviderModel {
   id: string;
   name: string;
+  isFree?: boolean;
 }
 
 export interface Provider {

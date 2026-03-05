@@ -68,7 +68,7 @@ interface SettingsState extends TicketeerSettings {
   setMaxOutputTokens: (tokens: number) => void;
 }
 
-export const useSettingsStore = create<SettingsState>((set, get) => ({
+export const useSettingsStore = create<SettingsState>((set) => ({
   ...loadFromStorage(),
 
   setApiKey: (provider, key) => {

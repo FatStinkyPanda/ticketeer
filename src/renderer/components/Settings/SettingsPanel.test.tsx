@@ -12,7 +12,7 @@ function resetSettings() {
     lastProvider: null,
     lastModel: null,
     theme: 'system',
-    maxOutputTokens: 4096,
+    maxOutputTokens: 64000,
   });
 }
 
@@ -83,9 +83,9 @@ describe('SettingsPanel', () => {
   });
 
   describe('max output tokens', () => {
-    it('shows 4096 as default', () => {
+    it('shows 64000 as default', () => {
       render(<SettingsPanel />);
-      expect(screen.getByLabelText(/Max Output Tokens/i)).toHaveValue(4096);
+      expect(screen.getByLabelText(/Max Output Tokens/i)).toHaveValue(64000);
     });
 
     it('updates max tokens when changed', () => {

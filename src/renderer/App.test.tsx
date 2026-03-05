@@ -5,6 +5,19 @@ import { useSettingsStore } from './store/settingsStore';
 import { useTicketStore } from './store/ticketStore';
 import { useAlertStore } from './store/alertStore';
 
+// Prevent real model API calls from ProviderSelector during App tests
+vi.mock('./hooks/useModelList', () => ({
+  useModelList: () => ({
+    models: [
+      { id: 'claude-opus-4-5', name: 'Claude Opus 4.5' },
+      { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5' },
+    ],
+    loading: false,
+    error: null,
+    isFallback: false,
+  }),
+}));
+
 const mockTicket = {
   content: 'TICKET CONTENT\n[Analyst to Complete]',
   provider: 'anthropic' as const,

@@ -15,7 +15,7 @@ describe('useSettings', () => {
       lastProvider: null,
       lastModel: null,
       theme: 'system',
-      maxOutputTokens: 4096,
+      maxOutputTokens: 64000,
     });
   });
 
@@ -38,9 +38,9 @@ describe('useSettings', () => {
       expect(result.current.theme).toBe('system');
     });
 
-    it('returns 4096 as default maxOutputTokens', () => {
+    it('returns 64000 as default maxOutputTokens', () => {
       const { result } = renderHook(() => useSettings());
-      expect(result.current.maxOutputTokens).toBe(4096);
+      expect(result.current.maxOutputTokens).toBe(64000);
     });
   });
 

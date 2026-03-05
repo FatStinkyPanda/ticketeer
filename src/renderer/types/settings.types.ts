@@ -21,5 +21,5 @@ export const DEFAULT_SETTINGS: TicketeerSettings = {
   lastProvider: null,
   lastModel: null,
   theme: 'system',
-  maxOutputTokens: 4096,
+  maxOutputTokens: 64000,
 };

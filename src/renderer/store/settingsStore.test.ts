@@ -78,7 +78,7 @@ describe('settingsStore', () => {
 
       expect(state.anthropicApiKey).toBeNull();
       expect(state.theme).toBe('system');
-      expect(state.maxOutputTokens).toBe(4096);
+      expect(state.maxOutputTokens).toBe(64000);
     });
 
     it('decrypts gemini and openrouter keys, null for missing anthropic, and defaults non-numeric maxOutputTokens', async () => {
@@ -105,7 +105,7 @@ describe('settingsStore', () => {
       expect(state.anthropicApiKey).toBeNull();
       expect(state.geminiApiKey).toBe(geminiKey);
       expect(state.openrouterApiKey).toBe(openrouterKey);
-      expect(state.maxOutputTokens).toBe(4096);
+      expect(state.maxOutputTokens).toBe(64000);
     });
 
     it('uses null and default theme when lastProvider, lastModel, and theme are missing from storage', async () => {

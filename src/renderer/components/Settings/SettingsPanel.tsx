@@ -75,14 +75,14 @@ export function SettingsPanel() {
               id="max-tokens"
               type="number"
               min={512}
-              max={32768}
+              max={131072}
               step={256}
               value={settings.maxOutputTokens}
               onChange={(e) => settings.setMaxOutputTokens(parseInt(e.target.value, 10))}
               className="w-full max-w-xs rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             />
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Default: 4096. Increase for very large tickets or decrease to save costs.
+              Default: 64000. Increase for very large tickets or decrease to save costs.
             </p>
           </div>
         </div>
