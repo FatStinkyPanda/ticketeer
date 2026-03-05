@@ -99,13 +99,15 @@ describe('AlertForm', () => {
       expect(screen.getByRole('status')).toBeInTheDocument();
     });
 
-    it('Generate Ticket button is disabled during loading', () => {
+    it('Generate Ticket button shows loading text and is disabled during loading', () => {
       useTicketStore.setState({ isLoading: true });
       useAlertStore.setState((s) => ({
         formData: { ...s.formData, alert_signature: 'ET EXPLOIT test' },
       }));
       render(<AlertForm />);
-      expect(screen.getByRole('button', { name: /Generate Ticket/i })).toBeDisabled();
+      const btn = screen.getByRole('button', { name: /Generating, please wait/i });
+      expect(btn).toBeDisabled();
+      expect(btn).toHaveTextContent('Generating, please wait');
     });
   });
 
