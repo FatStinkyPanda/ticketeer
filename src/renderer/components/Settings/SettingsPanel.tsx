@@ -94,10 +94,11 @@ export function SettingsPanel() {
           Privacy & Security
         </h3>
         <ul className="space-y-1 text-xs text-brand-700 dark:text-brand-400">
-          <li>• API keys are encrypted with AES-256 and stored only on this device.</li>
-          <li>• Alert data and generated tickets are never stored to disk.</li>
+          <li>• API keys are encrypted with AES-256 and stored in your browser&apos;s local storage. The encryption key is session-scoped and cleared when the tab closes.</li>
+          <li>• A Content Security Policy restricts all network requests to whitelisted AI provider endpoints, blocking unauthorised data exfiltration.</li>
           <li>• No data is sent to any server other than the AI provider you select.</li>
           <li>• PII is detected and blocked locally before any API call is made.</li>
+          <li>• Alert data and generated tickets are never persisted to storage.</li>
         </ul>
       </div>
     </div>
