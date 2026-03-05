@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from './store/settingsStore';
-import { useTicketStore } from './store/ticketStore';
+import { useTicketGeneration } from './hooks/useTicketGeneration';
 import { AlertForm } from './components/AlertForm';
 import { TicketViewer } from './components/TicketViewer';
 import { ProviderSelector } from './components/ProviderSelector';
@@ -26,7 +26,7 @@ function applyTheme(theme: Theme): void {
 export function App() {
   const [activeTab, setActiveTab] = useState<Tab>('generate');
   const theme = useSettingsStore((state) => state.theme);
-  const { ticket, clearTicket } = useTicketStore();
+  const { ticket, clearTicket, updateContent, reviseSection, isRevising } = useTicketGeneration();
 
   // Apply theme class to <html> and update when theme setting changes
   useEffect(() => {
@@ -123,7 +123,13 @@ export function App() {
 
             {/* Show ticket viewer if ticket exists, otherwise show form */}
             {ticket ? (
-              <TicketViewer ticket={ticket} onNewTicket={handleNewTicket} />
+              <TicketViewer
+                ticket={ticket}
+                onNewTicket={handleNewTicket}
+                onUpdateContent={updateContent}
+                onReviseSection={reviseSection}
+                isRevising={isRevising}
+              />
             ) : (
               <AlertForm onGoToSettings={handleGoToSettings} />
             )}

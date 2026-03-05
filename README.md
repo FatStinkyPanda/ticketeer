@@ -48,8 +48,10 @@
 2. Enforces strict PII/confidentiality rules **locally, before any data leaves the system**.
 3. Packages the alert data with the AI agent instructions into a complete, structured prompt.
 4. Sends the prompt to the analyst's chosen AI provider (Claude, Gemini, or OpenRouter).
-5. Receives and displays the populated ticket for review and copy/export.
-6. Persists API keys, settings, and last-used provider/model locally and securely.
+5. Receives and displays the populated ticket with unfilled-placeholder highlighting.
+6. Allows the analyst to directly **edit** the ticket in-place before export.
+7. Enables **AI-assisted revision** of a selected ticket section: the analyst highlights text, provides an instruction, and the AI rewrites just that section — with PII scanning applied to all revision inputs before any data leaves the system.
+8. Persists API keys, settings, and last-used provider/model locally and securely.
 
 ### What Ticketeer Does NOT Do
 
@@ -401,7 +403,8 @@ Once a ticket is generated, it is displayed in the **Ticket Viewer** panel.
 #### Display Requirements
 
 - Render the ticket as **monospaced preformatted text** to preserve the exact template structure.
-- Clearly display unfilled placeholders (e.g., `[Customer Name Here]`) in a distinct color (e.g., amber/orange) so the analyst knows what still needs manual completion.
+- Clearly display unfilled placeholders (e.g., `[Customer Name Here]`) in a distinct amber/orange color so the analyst knows what still needs manual completion.
+- A legend below the ticket explains the highlighted placeholder convention.
 - Display the provider name and model used to generate the ticket as a small, non-intrusive label.
 - Display a timestamp of when the ticket was generated.
 
@@ -410,6 +413,34 @@ Once a ticket is generated, it is displayed in the **Ticket Viewer** panel.
 - **Copy to Clipboard** — Copies the full raw ticket text.
 - **Download as .txt** — Saves the ticket as a plain-text file named `ticket_[timestamp].txt`.
 - **Download as .md** — Saves the ticket as a Markdown file.
+
+#### Edit Mode
+
+The analyst can click **Edit** to enter an inline edit mode:
+
+- The monospaced `<pre>` display is replaced by a full-height `<textarea>` pre-filled with the current ticket content.
+- The analyst can type freely to fill in placeholders, correct AI output, or add context.
+- **Save** commits the edits to the ticket store and returns to read mode.
+- **Cancel** discards changes and returns to read mode.
+- While in edit mode, the placeholder legend is hidden (all text is editable directly in the textarea).
+
+#### AI Revision Panel
+
+Below the ticket content, a persistent **"Revise a Section with AI"** panel allows targeted AI rewrites:
+
+1. **Select text** in the ticket (read mode) or the edit textarea (edit mode) and click **"Use Selection"** — the selected text is captured into the "Selected section" textarea.
+   - Alternatively, the analyst can paste any text directly into the "Selected section" textarea.
+2. Enter a **Revision instruction** (e.g., `"Make this section more concise and professional."`).
+3. Click **"Revise with AI"** — the application:
+   - Runs the **PII Guard's `scanFreeText`** on both the selected text and the instruction. If any PII pattern is detected in either input, the revision is blocked and an error is shown. No data is sent to the API.
+   - If clean, calls the configured AI provider using `buildRevisionPrompt` (a targeted revision prompt, distinct from the full ticket generation prompt).
+   - Displays the **revised text preview** below the inputs.
+4. The analyst can **Apply** (replaces the selected text in the ticket with the revision) or **Discard** (clears the preview without changes).
+
+**Key constraints:**
+- `isRevising` spinner is shown on the Revise button during the API call.
+- PII checks run synchronously before any async API call begins — no loading state is shown for fast-failing PII violations.
+- All revision prompts use the same system prompt (MSSP Agent Instructions) as ticket generation.
 
 ---
 
@@ -487,7 +518,7 @@ Rules:
   4. The analyst fills this in manually after copying/downloading the ticket.
 ```
 
-### Free-Text Field PII Scanning
+### Free-Text Field PII Scanning (Alert Form)
 
 ```
   Fields scanned: timestamp, alert_category, alert_signature, proto, app_proto, reported_by
@@ -497,10 +528,28 @@ Rules:
     SSN:            /\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b/
     Phone (NANP):   /(\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/
     Credit Card:    /\b(?:\d[ -]?){13,16}\b/ with Luhn validation
-    
+
   Warn patterns (do not block):
     Full names:     /\b[A-Z][a-z]{1,30}\s[A-Z][a-z]{1,30}\b/
     (Warn only — alert signatures can contain technology/company names)
+```
+
+### AI Revision Free-Text PII Scanning (`scanFreeText`)
+
+Before any AI revision API call, **both** the selected ticket section and the revision instruction are independently scanned using `piiGuard.scanFreeText()`:
+
+```
+  Inputs scanned: selectedText (ticket section), instruction (revision directive)
+
+  Block patterns (same as alert form):
+    Email, SSN, Phone (NANP), Credit Card (Luhn-validated)
+
+  Returns:
+    { safe: true }                      — inputs are clean; proceed to API
+    { safe: false, violations: [...] }  — block; show error; no API call made
+
+  Note: Full-name pattern is NOT applied here (analyst may legitimately quote
+  a ticket section that contains a client-submitted name in the signature text).
 ```
 
 ---
@@ -611,6 +660,27 @@ Generate the completed ticket now. Output only the ticket text — no preamble, 
 - `{{src_ip_type}}` and `{{dest_ip_type}}` are either `PRIVATE` or `PUBLIC`, determined by the PII Guard before the API call.
 - Only fields that have non-empty values are included in the message. Empty fields are omitted entirely — the agent infers "not provided" from their absence.
 
+### Revision Prompt (`buildRevisionPrompt`)
+
+Used exclusively by the AI Revision feature (§6.6). The system prompt is identical to ticket generation (verbatim `AGENT_INSTRUCTIONS`). The user message is a targeted revision block:
+
+```
+You are revising a specific section of an incident ticket.
+
+Original section:
+---
+{{selectedText}}
+---
+
+Revision instruction: {{instruction}}
+
+Return ONLY the revised text for this section. Preserve the plain-text formatting style — no markdown, no preamble, no surrounding commentary.
+```
+
+- `{{selectedText}}` — the text selected by the analyst from the ticket (post PII scan)
+- `{{instruction}}` — the analyst's revision directive (post PII scan)
+- Both inputs are independently scanned by `scanFreeText` before this prompt is constructed.
+
 ---
 
 ## 11. Settings & Persistence Specification
@@ -676,12 +746,16 @@ coverage: {
 }
 ```
 
+### Current Test Status
+
+> **459 tests · 24 test files · 100% pass rate · 100% coverage** (statements, branches, functions, lines)
+
 ### Required Test Suites
 
 | Module | Tests Required |
 |---|---|
-| `piiGuard.ts` | All RFC 1918 ranges pass; all public IPs without toggle fail; email/SSN/phone/CC patterns detected; valid alert signatures not flagged |
-| `promptBuilder.ts` | Correct system prompt equals verbatim agent instructions; user message includes only provided fields; IP type tags rendered correctly; empty fields omitted |
+| `piiGuard.ts` | All RFC 1918 ranges pass; all public IPs without toggle fail; email/SSN/phone/CC patterns detected; valid alert signatures not flagged; `scanFreeText` returns safe/unsafe correctly for all PII patterns |
+| `promptBuilder.ts` | System prompt equals verbatim agent instructions; user message includes only provided fields; IP type tags correct; empty fields omitted; `buildRevisionPrompt` contains selected text, instruction, revision context header, separator lines, and "Return ONLY" directive |
 | `IpAddressField.tsx` | Private IPs accepted; public IPs blocked without toggle; public IPs accepted with toggle; invalid IPs rejected; IPv6 rejected |
 | `AlertForm.tsx` | Form disabled without signature; PII errors displayed; submit calls generation hook; loading state shown; API errors displayed |
 | `anthropic.ts` | Correct endpoint called; correct headers sent; response parsed correctly; 401/429/500 errors handled |
@@ -691,7 +765,8 @@ coverage: {
 | `SettingsPanel.tsx` | Key saved on click; key deleted on confirm; masked display; reveal toggle; validation indicator shown |
 | `ProviderSelector.tsx` | All three providers selectable; model list populated; last-used persisted |
 | `useSettings.ts` | Loads from store on mount; saves on change; encryption round-trip integrity |
-| `useTicketGeneration.ts` | Invokes PII guard → prompt builder → provider router in order; sets loading/error/ticket state correctly |
+| `useTicketGeneration.ts` | Invokes PII guard → prompt builder → provider router; sets loading/error/ticket state; `updateContent` updates ticket in store; `reviseSection` blocks on PII violations; `reviseSection` succeeds with correct provider/model/key; `isRevising` state transitions correctly |
+| `TicketViewer.tsx` | Placeholder highlighting; edit mode enter/save/cancel; textarea pre-filled; `onUpdateContent` called on save; AI revision panel: disabled states, Revise button spinner, revision preview display, Apply/Discard behavior, null result handling; `Use Selection` captures window.getSelection (read mode) and textarea selectionStart/End (edit mode) |
 | `agentInstructions.ts` | Constant text exactly matches `MSSP_Ticket_Agent_Instructions.md` content |
 | `encryption.ts` | Encrypt then decrypt returns original; different values produce different ciphertext |
 
@@ -817,8 +892,8 @@ AI agents executing the DEV workflow must work through this list in order. Mark 
 - [ ] Write 100% tests for `ApiKeyField.tsx`
 - [ ] Implement `SettingsPanel.tsx`
 - [ ] Write 100% tests for `SettingsPanel.tsx`
-- [ ] Implement `TicketViewer.tsx` with placeholder highlighting, copy, download
-- [ ] Write 100% tests for `TicketViewer.tsx`
+- [x] Implement `TicketViewer.tsx` with placeholder highlighting, copy, download, edit mode, and AI revision panel
+- [x] Write 100% tests for `TicketViewer.tsx`
 - [ ] Implement `LoadingSpinner`, `ErrorBanner`, `CopyButton` shared components
 - [ ] Write tests for all shared components
 - [ ] Confirm: all tests pass, coverage 100%
@@ -851,9 +926,11 @@ AI agents executing the DEV workflow must work through this list in order. Mark 
 - [ ] Accessibility audit (keyboard navigation, ARIA labels, screen reader support)
 - [ ] Add keyboard shortcut: `Ctrl/Cmd + Enter` to submit form
 - [ ] Add "Clear Form" button with confirmation
-- [ ] Add "New Ticket" button in ticket viewer to reset form
-- [ ] Verify all error states have user-readable messages
-- [ ] Verify all loading states are correctly shown/hidden
+- [x] Add "New Ticket" button in ticket viewer to reset form
+- [x] Add inline ticket editing (Edit/Save/Cancel) and AI-assisted section revision (Revise with AI)
+- [x] Add `scanFreeText` PII guard for revision inputs
+- [x] Verify all error states have user-readable messages
+- [x] Verify all loading states are correctly shown/hidden
 - [ ] README final review — update all task checkboxes
 - [ ] Tag release `v1.0.0`
 - [ ] Confirm: all tests pass, coverage 100%

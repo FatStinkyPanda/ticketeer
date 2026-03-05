@@ -333,4 +333,285 @@ describe('useTicketGeneration', () => {
       expect(result.current.isLoading).toBe(false);
     });
   });
+
+  describe('updateContent', () => {
+    it('updates ticket content when ticket exists', () => {
+      useTicketStore.setState({
+        ticket: { content: 'original content', provider: 'anthropic', model: 'test', generatedAt: new Date() },
+      });
+
+      const { result } = renderHook(() => useTicketGeneration());
+      act(() => {
+        result.current.updateContent('updated content');
+      });
+
+      expect(result.current.ticket?.content).toBe('updated content');
+    });
+
+    it('does nothing when ticket is null', () => {
+      const { result } = renderHook(() => useTicketGeneration());
+      act(() => {
+        result.current.updateContent('some content');
+      });
+
+      expect(result.current.ticket).toBeNull();
+    });
+  });
+
+  describe('reviseSection — initial state', () => {
+    it('starts with isRevising false', () => {
+      const { result } = renderHook(() => useTicketGeneration());
+      expect(result.current.isRevising).toBe(false);
+    });
+  });
+
+  describe('reviseSection — PII violations', () => {
+    it('returns null and sets PII_VIOLATION when selectedText contains PII', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText')
+        .mockReturnValueOnce({ safe: false, violations: ['email address detected'] })
+        .mockReturnValueOnce({ safe: true, violations: [] });
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = 'initial';
+      await act(async () => {
+        returned = await result.current.reviseSection('user@example.com', 'make clearer');
+      });
+
+      expect(returned).toBeNull();
+      expect(result.current.error?.code).toBe('PII_VIOLATION');
+      expect(result.current.error?.message).toContain('selected text');
+    });
+
+    it('returns null and sets PII_VIOLATION when instruction contains PII', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText')
+        .mockReturnValueOnce({ safe: true, violations: [] })
+        .mockReturnValueOnce({ safe: false, violations: ['phone number detected'] });
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = 'initial';
+      await act(async () => {
+        returned = await result.current.reviseSection('clean text', 'call 555-123-4567');
+      });
+
+      expect(returned).toBeNull();
+      expect(result.current.error?.code).toBe('PII_VIOLATION');
+      expect(result.current.error?.message).toContain('instruction');
+    });
+
+    it('does not set isRevising when PII check fails', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: false, violations: ['email address detected'] });
+
+      const { result } = renderHook(() => useTicketGeneration());
+      await act(async () => {
+        await result.current.reviseSection('bad@example.com', 'instruction');
+      });
+
+      expect(result.current.isRevising).toBe(false);
+    });
+  });
+
+  describe('reviseSection — no provider configured', () => {
+    it('returns null and sets API_ERROR when no provider selected', async () => {
+      useSettingsStore.setState({ lastProvider: null });
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = 'initial';
+      await act(async () => {
+        returned = await result.current.reviseSection('section text', 'make clearer');
+      });
+
+      expect(returned).toBeNull();
+      expect(result.current.error?.code).toBe('API_ERROR');
+      expect(result.current.error?.message).toContain('No AI provider');
+    });
+
+    it('returns null and sets AUTH_ERROR when API key is missing', async () => {
+      useSettingsStore.setState({ anthropicApiKey: null });
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = 'initial';
+      await act(async () => {
+        returned = await result.current.reviseSection('section text', 'make clearer');
+      });
+
+      expect(returned).toBeNull();
+      expect(result.current.error?.code).toBe('AUTH_ERROR');
+    });
+  });
+
+  describe('reviseSection — success', () => {
+    it('returns revised text on success (anthropic)', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      vi.spyOn(providerRouterModule, 'routeToProvider').mockResolvedValue('Revised section text');
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = null;
+      await act(async () => {
+        returned = await result.current.reviseSection('Original section', 'Be more concise');
+      });
+
+      expect(returned).toBe('Revised section text');
+      expect(result.current.isRevising).toBe(false);
+    });
+
+    it('calls buildRevisionPrompt with selectedText and instruction', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      const revisionSpy = vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      vi.spyOn(providerRouterModule, 'routeToProvider').mockResolvedValue('result');
+
+      const { result } = renderHook(() => useTicketGeneration());
+      await act(async () => {
+        await result.current.reviseSection('My section', 'Improve clarity');
+      });
+
+      expect(revisionSpy).toHaveBeenCalledWith('My section', 'Improve clarity');
+    });
+
+    it('returns revised text using gemini provider', async () => {
+      useSettingsStore.setState({
+        geminiApiKey: 'AIzaSy-gemini-key',
+        lastProvider: 'gemini',
+        lastModel: 'gemini-2.0-flash',
+      });
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      const routerSpy = vi.spyOn(providerRouterModule, 'routeToProvider').mockResolvedValue('Gemini revised');
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = null;
+      await act(async () => {
+        returned = await result.current.reviseSection('text', 'instruction');
+      });
+
+      expect(returned).toBe('Gemini revised');
+      expect(routerSpy).toHaveBeenCalledWith(expect.objectContaining({ provider: 'gemini' }));
+    });
+
+    it('returns revised text using openrouter provider', async () => {
+      useSettingsStore.setState({
+        openrouterApiKey: 'sk-or-v1-key',
+        lastProvider: 'openrouter',
+        lastModel: 'openai/gpt-4o',
+      });
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      const routerSpy = vi.spyOn(providerRouterModule, 'routeToProvider').mockResolvedValue('OR revised');
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = null;
+      await act(async () => {
+        returned = await result.current.reviseSection('text', 'instruction');
+      });
+
+      expect(returned).toBe('OR revised');
+      expect(routerSpy).toHaveBeenCalledWith(expect.objectContaining({ provider: 'openrouter' }));
+    });
+
+    it('sets isRevising false after successful revision', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      vi.spyOn(providerRouterModule, 'routeToProvider').mockResolvedValue('revised');
+
+      const { result } = renderHook(() => useTicketGeneration());
+      await act(async () => {
+        await result.current.reviseSection('text', 'instruction');
+      });
+
+      expect(result.current.isRevising).toBe(false);
+    });
+  });
+
+  describe('reviseSection — API error handling', () => {
+    it('returns null and sets error on API failure with code', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      vi.spyOn(providerRouterModule, 'routeToProvider').mockRejectedValue({
+        code: 'RATE_LIMIT',
+        message: 'Rate limit reached.',
+      });
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = 'initial';
+      await act(async () => {
+        returned = await result.current.reviseSection('text', 'instruction');
+      });
+
+      expect(returned).toBeNull();
+      expect(result.current.error?.code).toBe('RATE_LIMIT');
+      expect(result.current.isRevising).toBe(false);
+    });
+
+    it('wraps plain Error in API_ERROR on revision failure', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      vi.spyOn(providerRouterModule, 'routeToProvider').mockRejectedValue(new Error('Network failed'));
+
+      const { result } = renderHook(() => useTicketGeneration());
+      let returned: string | null = 'initial';
+      await act(async () => {
+        returned = await result.current.reviseSection('text', 'instruction');
+      });
+
+      expect(returned).toBeNull();
+      expect(result.current.error?.code).toBe('API_ERROR');
+      expect(result.current.error?.message).toContain('unexpected error');
+    });
+
+    it('uses String(cause) in details when non-Error is thrown during revision', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      vi.spyOn(providerRouterModule, 'routeToProvider').mockRejectedValue('string-error');
+
+      const { result } = renderHook(() => useTicketGeneration());
+      await act(async () => {
+        await result.current.reviseSection('text', 'instruction');
+      });
+
+      expect(result.current.error?.code).toBe('API_ERROR');
+      expect(result.current.error?.details).toBe('string-error');
+    });
+
+    it('sets isRevising false after API error', async () => {
+      vi.spyOn(piiGuardModule, 'scanFreeText').mockReturnValue({ safe: true, violations: [] });
+      vi.spyOn(promptBuilderModule, 'buildRevisionPrompt').mockReturnValue({
+        systemPrompt: 'sys',
+        userMessage: 'user',
+      });
+      vi.spyOn(providerRouterModule, 'routeToProvider').mockRejectedValue(new Error('fail'));
+
+      const { result } = renderHook(() => useTicketGeneration());
+      await act(async () => {
+        await result.current.reviseSection('text', 'instruction');
+      });
+
+      expect(result.current.isRevising).toBe(false);
+    });
+  });
 });

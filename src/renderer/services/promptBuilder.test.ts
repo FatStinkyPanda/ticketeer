@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPrompt, buildUserMessage } from './promptBuilder';
+import { buildPrompt, buildUserMessage, buildRevisionPrompt } from './promptBuilder';
 import { AGENT_INSTRUCTIONS } from '../constants/agentInstructions';
 import type { AlertData } from '../types/alert.types';
 
@@ -206,5 +206,54 @@ describe('promptBuilder', () => {
       expect(msg).toContain('alert.signature: ET SCAN SSH');
       expect(msg).not.toContain('alert.signature:   ET SCAN SSH  ');
     });
+  });
+});
+
+describe('buildRevisionPrompt', () => {
+  it('returns an object with systemPrompt and userMessage', () => {
+    const result = buildRevisionPrompt('some text', 'make it clearer');
+    expect(result).toHaveProperty('systemPrompt');
+    expect(result).toHaveProperty('userMessage');
+  });
+
+  it('system prompt equals verbatim AGENT_INSTRUCTIONS', () => {
+    const result = buildRevisionPrompt('section text', 'instruction');
+    expect(result.systemPrompt).toBe(AGENT_INSTRUCTIONS);
+  });
+
+  it('user message contains the selected text', () => {
+    const result = buildRevisionPrompt('Alert details here', 'Be more concise');
+    expect(result.userMessage).toContain('Alert details here');
+  });
+
+  it('user message contains the revision instruction', () => {
+    const result = buildRevisionPrompt('some section', 'Make it more professional');
+    expect(result.userMessage).toContain('Make it more professional');
+  });
+
+  it('user message contains revision context header', () => {
+    const result = buildRevisionPrompt('text', 'instruction');
+    expect(result.userMessage).toContain('You are revising a specific section of an incident ticket.');
+  });
+
+  it('user message contains separator lines', () => {
+    const result = buildRevisionPrompt('text', 'instruction');
+    expect(result.userMessage).toContain('---');
+  });
+
+  it('user message instructs to return only revised text', () => {
+    const result = buildRevisionPrompt('text', 'instruction');
+    expect(result.userMessage).toContain('Return ONLY the revised text');
+  });
+
+  it('user message labels the revision instruction correctly', () => {
+    const result = buildRevisionPrompt('text', 'Shorten this paragraph');
+    expect(result.userMessage).toContain('Revision instruction: Shorten this paragraph');
+  });
+
+  it('system prompt is never modified between calls with different inputs', () => {
+    const r1 = buildRevisionPrompt('text1', 'instruction1');
+    const r2 = buildRevisionPrompt('text2', 'instruction2');
+    expect(r1.systemPrompt).toBe(r2.systemPrompt);
   });
 });

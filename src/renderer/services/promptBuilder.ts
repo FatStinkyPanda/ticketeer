@@ -95,3 +95,26 @@ export function buildPrompt(data: AlertData): BuiltPrompt {
     userMessage: buildUserMessage(data),
   };
 }
+
+/**
+ * Build a revision prompt for revising a specific section of an existing ticket.
+ * Used by the AI revision feature when the analyst selects a section and provides
+ * an instruction for how to improve it.
+ */
+export function buildRevisionPrompt(selectedText: string, instruction: string): BuiltPrompt {
+  return {
+    systemPrompt: AGENT_INSTRUCTIONS,
+    userMessage: [
+      'You are revising a specific section of an incident ticket.',
+      '',
+      'Original section:',
+      '---',
+      selectedText,
+      '---',
+      '',
+      `Revision instruction: ${instruction}`,
+      '',
+      'Return ONLY the revised text for this section. Preserve the plain-text formatting style — no markdown, no preamble, no surrounding commentary.',
+    ].join('\n'),
+  };
+}

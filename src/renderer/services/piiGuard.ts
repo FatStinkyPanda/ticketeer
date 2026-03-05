@@ -216,6 +216,48 @@ export function validateAlertData(data: AlertData): PiiGuardResult {
   return { valid: true };
 }
 
+// ─── Free-text PII scan (for AI revision inputs) ─────────────────────────────
+
+export interface FreeTextScanResult {
+  safe: boolean;
+  violations: string[];
+}
+
+/**
+ * Scan arbitrary free-form text for PII patterns before sending to an AI provider.
+ * Used to validate the selected ticket section and revision instruction in the AI revision feature.
+ *
+ * Returns { safe: true } when no PII patterns are detected.
+ * Returns { safe: false, violations: [...] } with a human-readable description of each match.
+ */
+export function scanFreeText(text: string): FreeTextScanResult {
+  if (!text || text.trim() === '') return { safe: true, violations: [] };
+
+  const violations: string[] = [];
+
+  if (EMAIL_PATTERN.test(text)) {
+    violations.push('email address detected');
+  }
+
+  if (SSN_PATTERN.test(text)) {
+    violations.push('Social Security Number detected');
+  }
+
+  if (PHONE_PATTERN.test(text)) {
+    violations.push('phone number detected');
+  }
+
+  const ccMatches = text.match(CREDIT_CARD_PATTERN);
+  if (ccMatches) {
+    const ccCandidate = ccMatches[0].replace(/[\s\-]/g, '');
+    if (luhnCheck(ccCandidate)) {
+      violations.push('credit card number detected');
+    }
+  }
+
+  return { safe: violations.length === 0, violations };
+}
+
 // Export patterns for testing
 export const _testExports = {
   EMAIL_PATTERN,

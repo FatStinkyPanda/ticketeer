@@ -9,6 +9,8 @@ interface TicketState {
   setLoading: (loading: boolean) => void;
   setError: (error: TicketGenerationError | null) => void;
   clearTicket: () => void;
+  /** Replace the content of the current ticket without regenerating. */
+  updateContent: (content: string) => void;
 }
 
 export const useTicketStore = create<TicketState>((set) => ({
@@ -36,5 +38,10 @@ export const useTicketStore = create<TicketState>((set) => ({
       ticket: null,
       error: null,
       isLoading: false,
+    })),
+
+  updateContent: (content: string) =>
+    set((state) => ({
+      ticket: state.ticket ? { ...state.ticket, content } : null,
     })),
 }));

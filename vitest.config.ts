@@ -4,6 +4,12 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // Ensure React's development build is always loaded during tests.
+    // Without this, an unset system NODE_ENV can cause Vite to bundle
+    // react.production.min.js, which throws on act() usage.
+    'process.env.NODE_ENV': JSON.stringify('test'),
+  },
   test: {
     globals: true,
     environment: 'jsdom',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateAlertData, _testExports } from './piiGuard';
+import { validateAlertData, scanFreeText, _testExports } from './piiGuard';
 import type { AlertData } from '../types/alert.types';
 
 const { luhnCheck } = _testExports;
@@ -312,6 +312,57 @@ describe('piiGuard', () => {
         expect(result.valid).toBe(true);
       });
     }
+  });
+});
+
+describe('scanFreeText', () => {
+  it('returns safe for empty string', () => {
+    expect(scanFreeText('')).toEqual({ safe: true, violations: [] });
+  });
+
+  it('returns safe for whitespace-only string', () => {
+    expect(scanFreeText('   ')).toEqual({ safe: true, violations: [] });
+  });
+
+  it('returns safe for clean security text', () => {
+    const result = scanFreeText('Make this section more concise and professional.');
+    expect(result.safe).toBe(true);
+    expect(result.violations).toHaveLength(0);
+  });
+
+  it('detects email address', () => {
+    const result = scanFreeText('Contact user@example.com for more information.');
+    expect(result.safe).toBe(false);
+    expect(result.violations).toContain('email address detected');
+  });
+
+  it('detects SSN', () => {
+    const result = scanFreeText('SSN is 123-45-6789');
+    expect(result.safe).toBe(false);
+    expect(result.violations).toContain('Social Security Number detected');
+  });
+
+  it('detects phone number', () => {
+    const result = scanFreeText('Call 555-123-4567 for details.');
+    expect(result.safe).toBe(false);
+    expect(result.violations).toContain('phone number detected');
+  });
+
+  it('detects valid credit card number (passes Luhn)', () => {
+    const result = scanFreeText('Card: 4111111111111111');
+    expect(result.safe).toBe(false);
+    expect(result.violations).toContain('credit card number detected');
+  });
+
+  it('does not flag credit card number that fails Luhn', () => {
+    const result = scanFreeText('Number: 4111111111111112');
+    expect(result.safe).toBe(true);
+  });
+
+  it('returns multiple violations when multiple PII patterns match', () => {
+    const result = scanFreeText('Email a@b.com SSN 123-45-6789');
+    expect(result.safe).toBe(false);
+    expect(result.violations.length).toBeGreaterThanOrEqual(2);
   });
 });
 
