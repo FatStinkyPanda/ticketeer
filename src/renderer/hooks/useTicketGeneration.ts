@@ -17,9 +17,10 @@ export function useTicketGeneration() {
   const ticketStore = useTicketStore();
 
   const generateTicket = async (formData: AlertData): Promise<void> => {
-    // Reset previous state
-    ticketStore.setLoading(true);
+    // Reset previous state — order matters: setError sets isLoading:false internally,
+    // so setLoading(true) must come last to survive React 18 batching.
     ticketStore.setError(null);
+    ticketStore.setLoading(true);
 
     // Step 1: PII Guard
     const piiResult = validateAlertData(formData);
