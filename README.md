@@ -1,3 +1,5 @@
+
+
 # 🎫 Ticketeer
 
 **MSSP Incident Ticket Generation Platform — AI-Powered, Privacy-First**
@@ -595,7 +597,7 @@ All three providers receive the **same logical prompt** (system + user). The for
   }
   ```
 - **Response:** `response.candidates[0].content.parts[0].text`
-- **Key format validation:** Alphanumeric, typically 39 characters
+- **Key format validation:** Alphanumeric, typically 39 characters; length must be greater than 10 and no prefix is required
 
 ### 9.3 OpenRouter
 
